@@ -220,6 +220,9 @@ public:
     int opacity() const { return mOpacity; }
     bool hidable() const { return mHidable; }
     int animationTime() const { return mAnimationTime; }
+    bool clickUnhide() const { return mClickUnhide; }
+    bool delayedUnhide() const { return mDelayedUnhide; }
+    int unhideDelayTime() const { return mUnhideDelayTime; }
 
     /*!
      * \brief Checks if a given Plugin is running and has the
@@ -234,18 +237,38 @@ public:
 public slots:
     /**
      * @brief Shows the QWidget and makes it visible on all desktops. This
-     * method is NOT related to showPanel(), hidePanel() and hidePanelWork()
-     * which handle the LXQt hiding by resizing the panel.
+     * method is NOT related to showPanel(), hidePanel() which handle the LXQt
+     * hiding by resizing the panel.
      */
     void show();
     /**
-     * @brief Shows the panel (immediately) after it had been hidden before.
-     * Stops the QTimer mHideTimer. This it NOT the same as QWidget::show()
-     * because hiding the panel in LXQt is done by making it very thin. So
-     * this method in fact restores the original size of the panel.
+     * @brief Un-hides the panel inmediatly.
+     * This method calls the restoration of the original size of the panel
+     * (actually done by showPanel()).
+     * This method cancel (stops) a previous QTimer mHideTimer.
+     *
+     * \sa mHidable, mHidden, mHideTimer, mClickUnhide, showPanel(), hidePanel()
+     */
+    void clickUnhidePanel();
+    /**
+     * @brief Un-hides the panel (delayed) by starting the QTimer mUnhideTimer.
+     * When that timer times out, showPanel() will be called. So this method is
+     * called when the cursor hovers the panel area but the panel will be
+     * un-hidden later.
+     * This methods cancel (stops) a previous QTimer mHideTimer.
+     *
+     * \sa mHidable, mHidden, mHideTimer, mUnhideTimer, mDelayedUnhide, mUnhideDelayTime,
+     *     showPanel(), hidePanel()
+     */
+    void delayedUnhidePanel();
+    /**
+     * @brief Un-hides the panel (immediately) after it had been hidden before.
+     * This it NOT the same as QWidget::show() because hiding the panel in LXQt
+     * is done by making it very thin. So this method in fact restores the
+     * original size of the panel.
      * \param animate flag for the panel show-up animation disabling (\sa mAnimationTime).
      *
-     * \sa mHidable, mHidden, mHideTimer, hidePanel(), hidePanelWork()
+     * \sa mHidable, mHidden, hidePanel(), clickUnhidePanel(), delayedUnhidePanel()
      */
     void showPanel(bool animate);
     /**
@@ -259,7 +282,7 @@ public slots:
     void hidePanel();
     /**
      * @brief Actually hides the panel. Will be invoked when the QTimer
-     * mHideTimer times out. That timer will be started by showPanel(). This
+     * mHideTimer times out. That timer will be started by hidePanel(). This
      * is NOT the same as QWidget::hide() because hiding the panel in LXQt is
      * done by making the panel very thin. So this method in fact makes the
      * panel very thin while the QWidget stays visible.
@@ -295,6 +318,9 @@ public slots:
     void setOpacity(int opacity, bool save); //!< \sa setPanelSize()
     void setHidable(bool hidable, bool save); //!< \sa setPanelSize()
     void setAnimationTime(int animationTime, bool save); //!< \sa setPanelSize()
+    void setClickUnhide(bool clickUnhide, bool save); //!< \sa setPanelSize()
+    void setDelayedUnhide(bool delayedUnhide, bool save); //!< \sa setPanelSize()
+    void setUnhideDelayTime(int unhideDelayTime, bool save); //!< \sa setPanelSize()
 
     /**
      * @brief Saves the current configuration, i.e. writes the current
@@ -352,7 +378,7 @@ signals:
 protected:
     /**
      * @brief Overrides QObject::event(QEvent * e). Some functions of
-     * the panel will be triggered by these events, e.g. showing/hiding
+     * the panel will be triggered by these events, e.g. hiding/un-hiding
      * the panel or showing the context menu.
      * @param event The event that was received.
      * @return "QObject::event(QEvent *e) should return true if the event e
@@ -495,7 +521,7 @@ private:
      * @brief Calculates and sets the geometry (i.e. the position and the size
      * on the screen) of the panel. Considers alignment, position, if the panel
      * is hidden and if its geometry should be set with animation.
-     * \param animate flag if showing/hiding the panel should be animated.
+     * \param animate flag if hiding/un-hiding the panel should be animated.
      */
     void setPanelGeometry(bool animate = false);
     /**
@@ -596,13 +622,13 @@ private:
      * @brief Stores if the panel is hidable, i.e. if the panel will be
      * hidden after the cursor has left the panel area.
      *
-     * \sa mHidden, mHideTimer, showPanel(), hidePanel(), hidePanelWork()
+     * \sa mHidden, mHideTimer, showPanel(), hidePanel()
      */
     bool mHidable;
     /**
      * @brief Stores if the panel is currently hidden.
      *
-     * \sa mHidable, mHideTimer, showPanel(), hidePanel(), hidePanelWork()
+     * \sa mHidable, mHideTimer, showPanel(), hidePanel()
      */
     bool mHidden;
     /**
@@ -614,11 +640,43 @@ private:
      */
     QTimer mHideTimer;
     /**
+     * @brief QTimer for un-hiding the panel. When the cursor is over the
+     * (little) visible part of the hidden panel area, this timer will be
+     * started. If the cursor leaves the hidden panel area, this timer will
+     * be stopped and reset. After this timer has timed out, the panel will
+     * actually be shown.
+     *
+     * \sa mHidable, mHidden, mDelayedUnhide, showPanel(), delayedUnhidePanel(), hidePanel()
+     */
+    QTimer mUnhideTimer;
+    /**
      * @brief Stores the duration of auto-hide animation.
      *
-     * \sa mHidden, mHideTimer, showPanel(), hidePanel(), hidePanelWork()
+     * \sa mHidable, mHidden, mHideTimer, showPanel(), hidePanel()
      */
     int mAnimationTime;
+    /**
+     * @brief Stores whether or not to use the click approach to un-hide the
+     * panel.
+     *
+     * \sa mHidable, mHidden, mUnhideTimer, clickUnhidePanel(), showPanel(), hidePanel()
+     */
+    bool mClickUnhide;
+    /**
+     * @brief Stores whether or not to use the delayed approach to un-hide the
+     * panel.
+     *
+     * \sa mHidable, mHidden, mUnhideTimer, mUnhideDelayTime,
+     *     delayedUnhidePanel(), showPanel(), hidePanel()
+     */
+    bool mDelayedUnhide;
+    /**
+     * @brief Stores the duration of waiting time before actually restoring
+     * (un-hiding) the panel.
+     *
+     * \sa mHidable, mHidden, mUnhideTimer, delayedUnhidePanel(), showPanel(), hidePanel()
+     */
+    int mUnhideDelayTime;
 
     QColor mFontColor; //!< Font color that is used in the style sheet.
     QColor mBackgroundColor; //!< Background color that is used in the style sheet.
@@ -637,7 +695,7 @@ private:
     QPointer<ConfigPanelDialog> mConfigDialog;
 
     /**
-     * @brief The animation used for showing/hiding an auto-hiding panel.
+     * @brief The animation used for hiding/un-hiding an auto-hiding panel.
      */
     QPropertyAnimation *mAnimation;
 

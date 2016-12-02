@@ -74,6 +74,9 @@
 #define CFG_KEY_PLUGINS            "plugins"
 #define CFG_KEY_HIDABLE            "hidable"
 #define CFG_KEY_ANIMATION          "animation-duration"
+#define CFG_KEY_CLICK_UNHIDE       "click-unhide"
+#define CFG_KEY_DELAYED_UNHIDE     "delayed-unhide"
+#define CFG_KEY_UNHIDE_DELAY_TIME  "unhide-delay-time"
 #define CFG_KEY_LOCKPANEL          "lockPanel"
 
 /************************************************
@@ -132,6 +135,9 @@ LXQtPanel::LXQtPanel(const QString &configGroup, LXQt::Settings *settings, QWidg
     mHidable(false),
     mHidden(false),
     mAnimationTime(0),
+    mClickUnhide(false),
+    mDelayedUnhide(false),
+    mUnhideDelayTime(0),
     mAnimation(nullptr),
     mLockPanel(false)
 {
@@ -206,6 +212,10 @@ LXQtPanel::LXQtPanel(const QString &configGroup, LXQt::Settings *settings, QWidg
 
     readSettings();
 
+    mUnhideTimer.setSingleShot(true);
+    mUnhideTimer.setInterval(mDelayedUnhide ? mUnhideDelayTime : 0);
+    connect(&mUnhideTimer, &QTimer::timeout, [this] { showPanel(true); });
+
     ensureVisible();
 
     loadPlugins();
@@ -234,6 +244,9 @@ void LXQtPanel::readSettings()
     mHidden = mHidable;
 
     mAnimationTime = mSettings->value(CFG_KEY_ANIMATION, mAnimationTime).toInt();
+    mClickUnhide = mSettings->value(CFG_KEY_CLICK_UNHIDE, mClickUnhide).toBool();
+    mDelayedUnhide = mSettings->value(CFG_KEY_DELAYED_UNHIDE, mDelayedUnhide).toBool();
+    mUnhideDelayTime = mSettings->value(CFG_KEY_UNHIDE_DELAY_TIME, mUnhideDelayTime).toInt();
 
     // By default we are using size & count from theme.
     setPanelSize(mSettings->value(CFG_KEY_PANELSIZE, PANEL_DEFAULT_SIZE).toInt(), false);
@@ -306,6 +319,9 @@ void LXQtPanel::saveSettings(bool later)
 
     mSettings->setValue(CFG_KEY_HIDABLE, mHidable);
     mSettings->setValue(CFG_KEY_ANIMATION, mAnimationTime);
+    mSettings->setValue(CFG_KEY_CLICK_UNHIDE, mClickUnhide);
+    mSettings->setValue(CFG_KEY_DELAYED_UNHIDE, mDelayedUnhide);
+    mSettings->setValue(CFG_KEY_UNHIDE_DELAY_TIME, mUnhideDelayTime);
 
     mSettings->setValue(CFG_KEY_LOCKPANEL, mLockPanel);
 
@@ -987,13 +1003,17 @@ bool LXQtPanel::event(QEvent *event)
         event->ignore();
         //no break intentionally
     case QEvent::Enter:
-        showPanel(mAnimationTime > 0);
+        delayedUnhidePanel(); // delay may be 0
         break;
 
     case QEvent::Leave:
     case QEvent::DragLeave:
         hidePanel();
         break;
+
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseButtonDblClick:
+        clickUnhidePanel();
 
     default:
         break;
@@ -1226,25 +1246,46 @@ void LXQtPanel::userRequestForDeletion()
     emit deletedByUser(this);
 }
 
-void LXQtPanel::showPanel(bool animate)
+void LXQtPanel::clickUnhidePanel()
 {
-    if (mHidable)
+    if (mHidable && mClickUnhide)
     {
         mHideTimer.stop();
+
+        showPanel(true);
+    }
+}
+
+void LXQtPanel::delayedUnhidePanel()
+{
+    // Notice: delay may be 0.
+    if (mHidable && (!mClickUnhide || mDelayedUnhide))
+    {
+        mHideTimer.stop();
+
         if (mHidden)
-        {
-            mHidden = false;
-            setPanelGeometry(mAnimationTime > 0 && animate);
-        }
+            mUnhideTimer.start();
+    }
+}
+
+void LXQtPanel::showPanel(bool animate)
+{
+    if (mHidden)
+    {
+        mHidden = false;
+        setPanelGeometry(mAnimationTime > 0 && animate);
     }
 }
 
 void LXQtPanel::hidePanel()
 {
-    if (mHidable && !mHidden
-            && !mStandaloneWindows->isAnyWindowShown()
-       )
-        mHideTimer.start();
+    if (mHidable)
+    {
+        mUnhideTimer.stop();
+
+        if (!mHidden && !mStandaloneWindows->isAnyWindowShown())
+            mHideTimer.start();
+    }
 }
 
 void LXQtPanel::hidePanelWork()
@@ -1268,6 +1309,8 @@ void LXQtPanel::setHidable(bool hidable, bool save)
         return;
 
     mHidable = hidable;
+    if (!mHidable)
+        mHideTimer.stop();
 
     if (save)
         saveSettings(true);
@@ -1281,6 +1324,41 @@ void LXQtPanel::setAnimationTime(int animationTime, bool save)
         return;
 
     mAnimationTime = animationTime;
+
+    if (save)
+        saveSettings(true);
+}
+
+void LXQtPanel::setClickUnhide(bool clickUnhide, bool save)
+{
+    if (mClickUnhide == clickUnhide)
+        return;
+
+    mClickUnhide = clickUnhide;
+
+    if (save)
+        saveSettings(true);
+}
+
+void LXQtPanel::setDelayedUnhide(bool delayedUnhide, bool save)
+{
+    if (mDelayedUnhide == delayedUnhide)
+        return;
+
+    mDelayedUnhide = delayedUnhide;
+    mUnhideTimer.setInterval(mDelayedUnhide ? mUnhideDelayTime : 0);
+
+    if (save)
+        saveSettings(true);
+}
+
+void LXQtPanel::setUnhideDelayTime(int unhideDelayTime, bool save)
+{
+    if (mUnhideDelayTime == unhideDelayTime)
+        return;
+
+    mUnhideDelayTime = unhideDelayTime;
+    mUnhideTimer.setInterval(mDelayedUnhide ? mUnhideDelayTime : 0);
 
     if (save)
         saveSettings(true);

@@ -58,6 +58,7 @@ public slots:
 
 private slots:
     void editChanged();
+    void activateUnhideDelayTime(bool hidableChecked); 
     void widthTypeChanged();
     void positionChanged();
     void pickFontColor();
@@ -90,6 +91,9 @@ private:
     ILXQtPanel::Position mOldPosition;
     bool mOldHidable;
     int mOldAnimation;
+    bool mOldClickUnhide;
+    bool mOldDelayedUnhide;
+    int mOldUnhideDelayTime;
     int mOldScreenNum;
     QColor mOldFontColor;
     QColor mOldBackgroundColor;

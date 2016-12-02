@@ -76,6 +76,9 @@ ConfigPanelWidget::ConfigPanelWidget(LXQtPanel *panel, QWidget *parent) :
     mOldHidable = mPanel->hidable();
 
     mOldAnimation = mPanel->animationTime();
+    mOldClickUnhide = mPanel->clickUnhide();
+    mOldDelayedUnhide = mPanel->delayedUnhide();
+    mOldUnhideDelayTime = mPanel->unhideDelayTime();
 
     ui->spinBox_panelSize->setMinimum(PANEL_MINIMUM_SIZE);
     ui->spinBox_panelSize->setMaximum(PANEL_MAXIMUM_SIZE);
@@ -99,8 +102,12 @@ ConfigPanelWidget::ConfigPanelWidget(LXQtPanel *panel, QWidget *parent) :
 
     connect(ui->comboBox_alignment,         SIGNAL(activated(int)),         this, SLOT(editChanged()));
     connect(ui->comboBox_position,          SIGNAL(activated(int)),         this, SLOT(positionChanged()));
+    connect(ui->checkBox_hidable,           &QCheckBox::toggled,            this, &ConfigPanelWidget::activateUnhideDelayTime);
     connect(ui->checkBox_hidable,           SIGNAL(toggled(bool)),          this, SLOT(editChanged()));
     connect(ui->spinBox_animation,          SIGNAL(valueChanged(int)),      this, SLOT(editChanged()));
+    connect(ui->checkBox_clickUnhide,       &QCheckBox::toggled,            this, &ConfigPanelWidget::editChanged);
+    connect(ui->checkBox_delayedUnhide,     &QCheckBox::toggled,            this, &ConfigPanelWidget::editChanged);
+    connect(ui->spinBox_unhideDelayTime, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), this, &ConfigPanelWidget::editChanged);
 
     connect(ui->checkBox_customFontColor,   SIGNAL(toggled(bool)),          this, SLOT(editChanged()));
     connect(ui->pushButton_customFontColor, SIGNAL(clicked(bool)),          this, SLOT(pickFontColor()));
@@ -127,6 +134,9 @@ void ConfigPanelWidget::reset()
     ui->checkBox_hidable->setChecked(mOldHidable);
 
     ui->spinBox_animation->setValue(mOldAnimation);
+    ui->checkBox_clickUnhide->setChecked(mOldClickUnhide);
+    ui->checkBox_delayedUnhide->setChecked(mOldDelayedUnhide);
+    ui->spinBox_unhideDelayTime->setValue(mOldUnhideDelayTime);
 
     fillComboBox_alignment();
     ui->comboBox_alignment->setCurrentIndex(mOldAlignment + 1);
@@ -261,6 +271,9 @@ void ConfigPanelWidget::editChanged()
     mPanel->setPosition(mScreenNum, mPosition, true);
     mPanel->setHidable(ui->checkBox_hidable->isChecked(), true);
     mPanel->setAnimationTime(ui->spinBox_animation->value(), true);
+    mPanel->setClickUnhide(ui->checkBox_clickUnhide->isChecked(), true);
+    mPanel->setDelayedUnhide(ui->checkBox_delayedUnhide->isChecked(), true);
+    mPanel->setUnhideDelayTime(ui->spinBox_unhideDelayTime->value(), true);
 
     mPanel->setFontColor(ui->checkBox_customFontColor->isChecked() ? mFontColor : QColor(), true);
     if (ui->checkBox_customBgColor->isChecked())
@@ -278,6 +291,13 @@ void ConfigPanelWidget::editChanged()
     mPanel->setBackgroundImage(image, true);
 }
 
+/************************************************
+ *
+ ************************************************/
+void ConfigPanelWidget::activateUnhideDelayTime(bool hidableChecked)
+{
+    ui->spinBox_unhideDelayTime->setEnabled(hidableChecked && ui->checkBox_delayedUnhide->isChecked());
+}
 
 /************************************************
  *
